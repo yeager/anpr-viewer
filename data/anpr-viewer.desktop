@@ -2,7 +2,7 @@
 Name=ANPR Viewer
 Comment=License plate recognition from video
 Exec=anpr-viewer
-Icon=camera-video-symbolic
+Icon=se.danielnylander.anpr-viewer
 Terminal=false
 Type=Application
 Categories=Utility;Video;
