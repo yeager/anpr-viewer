@@ -3,7 +3,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Gdk", "4.0")
-from gi.repository import Gtk, Adw, Gdk, Gio, GLib, GdkPixbuf
+from gi.repository import Gtk, Adw, Gdk, Gio, GLib
 
 import gettext
 import locale
@@ -201,13 +201,15 @@ class ANPRWindow(Adw.ApplicationWindow):
         self._video_status.add_controller(drop_target)
         self._video_status.set_vexpand(True)
 
-        self._preview_picture = Gtk.Picture()
-        self._preview_picture.set_visible(False)
-        self._preview_picture.set_vexpand(True)
-        self._preview_picture.add_controller(Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY))
+        # Video player widget (GTK4 built-in)
+        self._video_widget = Gtk.Video()
+        self._video_widget.set_vexpand(True)
+        self._video_widget.set_visible(False)
+        self._video_widget.set_autoplay(True)
+        self._video_widget.set_loop(True)
 
         left_box.append(self._video_status)
-        left_box.append(self._preview_picture)
+        left_box.append(self._video_widget)
 
         # Progress bar
         self._progress = Gtk.ProgressBar()
@@ -259,6 +261,36 @@ class ANPRWindow(Adw.ApplicationWindow):
         main_box.append(self._status)
 
         self.set_content(main_box)
+
+        # Apply plate CSS
+        css = Gtk.CssProvider()
+        css.load_from_string("""
+            .plate-frame {
+                background: #FFFFFF;
+                border: 2px solid #000000;
+                border-radius: 6px;
+                min-width: 160px;
+                min-height: 44px;
+            }
+            .plate-eu-band {
+                background: #003DA5;
+                color: #FFFFFF;
+                border-radius: 4px 0 0 4px;
+                font-size: 14px;
+                min-width: 28px;
+            }
+            .plate-text {
+                font-family: "FE-Schrift", "DIN 1451", "Arial Black", monospace;
+                font-size: 22px;
+                font-weight: 900;
+                color: #000000;
+                letter-spacing: 3px;
+            }
+        """)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), css,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
 
         # Show welcome
         if not self.settings.get("welcome_shown"):
@@ -357,27 +389,25 @@ class ANPRWindow(Adw.ApplicationWindow):
 
     def _load_video(self, path):
         self._video_path = path
-        self._video_status.set_title(os.path.basename(path) if os.path.exists(path) else path)
-        self._video_status.set_description(_("Video loaded. Click 'Scan Video' to detect plates."))
-        self._video_status.set_icon_name("emblem-ok-symbolic")
         self._process_btn.set_sensitive(True)
         self._status.set_text(_("Loaded: %s") % path)
 
-        # Try to show preview frame
-        frame = _extract_frame(path, timestamp=1)
-        if frame:
-            try:
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file(frame)
-                texture = Gdk.Texture.new_for_pixbuf(pixbuf)
-                self._preview_picture.set_paintable(texture)
-                self._preview_picture.set_visible(True)
+        # Show video in player
+        try:
+            if path.startswith(("rtsp://", "http://", "https://")):
+                self._video_widget.set_filename(None)
+                # For streams, show status instead
+                self._video_status.set_title(path)
+                self._video_status.set_description(_("Stream loaded. Click 'Scan Video' to detect plates."))
+                self._video_status.set_icon_name("emblem-ok-symbolic")
+            else:
+                self._video_widget.set_filename(path)
+                self._video_widget.set_visible(True)
                 self._video_status.set_visible(False)
-            except:
-                pass
-            try:
-                os.unlink(frame)
-            except:
-                pass
+        except Exception:
+            self._video_status.set_title(os.path.basename(path) if os.path.exists(path) else path)
+            self._video_status.set_description(_("Video loaded. Click 'Scan Video' to detect plates."))
+            self._video_status.set_icon_name("emblem-ok-symbolic")
 
     def _on_process(self, btn):
         if not self._video_path:
@@ -459,16 +489,58 @@ class ANPRWindow(Adw.ApplicationWindow):
                               {"time": ts, "count": count})
 
     def _add_plate_row(self, entry):
-        row = Adw.ActionRow()
-        row.set_title(entry["plate"])
-        row.set_subtitle(f'{entry["time"][:19]} — {entry["confidence"]}%')
-        row.add_prefix(Gtk.Image.new_from_icon_name("emblem-documents-symbolic"))
+        row = Gtk.ListBoxRow()
+        row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row_box.set_margin_start(8)
+        row_box.set_margin_end(8)
+        row_box.set_margin_top(6)
+        row_box.set_margin_bottom(6)
 
+        # EU-style license plate widget
+        plate_frame = Gtk.Frame()
+        plate_inner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+
+        # Blue EU band (left)
+        eu_band = Gtk.Label(label="🇸🇪")
+        eu_band.set_size_request(28, 44)
+        eu_band.set_valign(Gtk.Align.CENTER)
+        eu_band.set_halign(Gtk.Align.CENTER)
+        eu_band.add_css_class("plate-eu-band")
+        plate_inner.append(eu_band)
+
+        # Plate text
+        plate_label = Gtk.Label(label=entry["plate"])
+        plate_label.add_css_class("plate-text")
+        plate_label.set_halign(Gtk.Align.CENTER)
+        plate_label.set_hexpand(True)
+        plate_label.set_margin_start(8)
+        plate_label.set_margin_end(8)
+        plate_inner.append(plate_label)
+
+        plate_frame.set_child(plate_inner)
+        plate_frame.add_css_class("plate-frame")
+        row_box.append(plate_frame)
+
+        # Info (time + confidence)
+        info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        info_box.set_valign(Gtk.Align.CENTER)
+        info_box.set_hexpand(True)
+        time_label = Gtk.Label(label=entry["time"][11:19], xalign=0)
+        time_label.add_css_class("dim-label")
+        time_label.add_css_class("caption")
+        info_box.append(time_label)
+        conf_label = Gtk.Label(label=f'{entry["confidence"]}%', xalign=0)
+        conf_label.add_css_class("caption")
+        info_box.append(conf_label)
+        row_box.append(info_box)
+
+        # Copy button
         copy_btn = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER)
         copy_btn.add_css_class("flat")
         copy_btn.connect("clicked", self._on_copy_plate, entry["plate"])
-        row.add_suffix(copy_btn)
+        row_box.append(copy_btn)
 
+        row.set_child(row_box)
         self._plate_list.prepend(row)
         self._plate_count.set_text(str(len(self.plate_log.entries)))
 
