@@ -753,7 +753,7 @@ class ANPRApp(Adw.Application):
             self.window = ANPRWindow(self)
         self.window.present()
 
-    def _on_settings(self, *_):
+    def _on_settings(self, *_args):
         if not self.window:
             return
         win = self.window
@@ -792,7 +792,7 @@ class ANPRApp(Adw.Application):
         dialog.add(page)
         dialog.present(win)
 
-    def _on_export_log(self, *_):
+    def _on_export_log(self, *_args):
         if not self.window or not self.window.plate_log.entries:
             return
         dialog = Gtk.FileDialog()
@@ -814,14 +814,14 @@ class ANPRApp(Adw.Application):
         except:
             pass
 
-    def _on_clear_log(self, *_):
+    def _on_clear_log(self, *_args):
         if self.window:
             self.window.plate_log.clear()
             self.window._refresh_plate_list()
             self.window._plate_count.set_text("0")
             self.window._status.set_text(_("Log cleared"))
 
-    def _on_copy_debug(self, *_):
+    def _on_copy_debug(self, *_args):
         if not self.window:
             return
         from . import __version__
@@ -837,7 +837,7 @@ class ANPRApp(Adw.Application):
         clipboard.set(info)
         self.window._status.set_text(_("Debug info copied"))
 
-    def _on_shortcuts(self, *_):
+    def _on_shortcuts(self, *_args):
         if self.window:
             dialog = Gtk.ShortcutsWindow(transient_for=self.window)
             section = Gtk.ShortcutsSection(visible=True)
@@ -852,7 +852,7 @@ class ANPRApp(Adw.Application):
             dialog.append(section)
             dialog.present()
 
-    def _on_about(self, *_):
+    def _on_about(self, *_args):
         from . import __version__
         dialog = Adw.AboutDialog(
             application_name=_("ANPR Viewer"),
@@ -866,7 +866,7 @@ class ANPRApp(Adw.Application):
         )
         dialog.present(self.window)
 
-    def _on_quit(self, *_):
+    def _on_quit(self, *_args):
         self.quit()
 
 
