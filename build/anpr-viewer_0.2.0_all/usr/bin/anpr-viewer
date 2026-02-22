@@ -1,0 +1,3 @@
+#!/usr/bin/env python3
+from anpr_viewer.main import main
+main()

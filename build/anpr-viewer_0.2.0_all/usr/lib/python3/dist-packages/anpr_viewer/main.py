@@ -97,72 +97,6 @@ def _extract_frame(video_path, timestamp=0):
     return None
 
 
-def _capture_device_frame(device_path):
-    """Capture a single frame from a video device (webcam)."""
-    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-    tmp.close()
-    try:
-        if sys.platform == "darwin":
-            cmd = ["ffmpeg", "-f", "avfoundation", "-framerate", "1",
-                   "-i", device_path, "-frames:v", "1", "-y", tmp.name]
-        else:
-            cmd = ["ffmpeg", "-f", "v4l2", "-framerate", "1",
-                   "-i", device_path, "-frames:v", "1", "-y", tmp.name]
-        subprocess.run(cmd, capture_output=True, timeout=10)
-        if os.path.exists(tmp.name) and os.path.getsize(tmp.name) > 0:
-            return tmp.name
-    except:
-        pass
-    return None
-
-
-def _list_video_devices():
-    """List available video capture devices."""
-    devices = []
-    if sys.platform == "darwin":
-        # macOS: use ffmpeg AVFoundation listing
-        try:
-            r = subprocess.run(
-                ["ffmpeg", "-f", "avfoundation", "-list_devices", "true", "-i", ""],
-                capture_output=True, text=True, timeout=5
-            )
-            # Parse stderr for video devices (before audio section)
-            in_video = False
-            for line in r.stderr.splitlines():
-                if "AVFoundation video devices:" in line:
-                    in_video = True
-                    continue
-                if "AVFoundation audio devices:" in line:
-                    break
-                if in_video:
-                    m = re.search(r'\[(\d+)\]\s*(.*)', line)
-                    if m:
-                        idx, name = m.group(1), m.group(2).strip()
-                        devices.append({"id": idx, "name": name, "path": idx})
-        except:
-            pass
-    else:
-        # Linux: enumerate /dev/video*
-        import glob
-        for dev in sorted(glob.glob("/dev/video*")):
-            name = dev
-            try:
-                r = subprocess.run(
-                    ["v4l2-ctl", "-d", dev, "--info"],
-                    capture_output=True, text=True, timeout=3
-                )
-                for line in r.stdout.splitlines():
-                    if "Card type" in line:
-                        name = line.split(":", 1)[1].strip()
-                        break
-            except:
-                pass
-            dev_num = re.search(r'\d+', dev)
-            devices.append({"id": dev_num.group() if dev_num else dev,
-                            "name": name, "path": dev})
-    return devices
-
-
 # ── Logging ──────────────────────────────────────────────────
 
 class PlateLog:
@@ -210,7 +144,6 @@ class ANPRWindow(Adw.ApplicationWindow):
         self.plate_log = PlateLog()
         self._processing = False
         self._video_path = None
-        self._device_path = None
 
         # Main layout
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -223,11 +156,6 @@ class ANPRWindow(Adw.ApplicationWindow):
         open_btn = Gtk.Button(icon_name="document-open-symbolic", tooltip_text=_("Open video file"))
         open_btn.connect("clicked", self._on_open_video)
         headerbar.pack_start(open_btn)
-
-        # Camera device button
-        cam_btn = Gtk.Button(icon_name="camera-web-symbolic", tooltip_text=_("Open video device"))
-        cam_btn.connect("clicked", self._on_open_device)
-        headerbar.pack_start(cam_btn)
 
         # Stream URL button
         stream_btn = Gtk.Button(icon_name="network-server-symbolic", tooltip_text=_("Open video stream URL"))
@@ -269,7 +197,7 @@ class ANPRWindow(Adw.ApplicationWindow):
         self._video_status = Adw.StatusPage()
         self._video_status.set_icon_name("video-x-generic-symbolic")
         self._video_status.set_title(_("No video loaded"))
-        self._video_status.set_description(_("Open a video file, connect a camera, or drag & drop.\nYou can also enter a stream URL."))
+        self._video_status.set_description(_("Open a video file or drag & drop one here.\nYou can also enter a stream URL."))
         self._video_status.add_controller(drop_target)
         self._video_status.set_vexpand(True)
 
@@ -383,7 +311,6 @@ class ANPRWindow(Adw.ApplicationWindow):
         page.set_description(_(
             "Automatic license plate recognition from video.\\n\\n"
             "✓ Open video files or live streams\\n"
-            "✓ Live capture from webcams and USB cameras\\n"
             "✓ Drag & drop support\\n"
             "✓ Detected plates listed in real-time\\n"
             "✓ Log results to file\\n"
@@ -451,95 +378,6 @@ class ANPRWindow(Adw.ApplicationWindow):
 
         dialog.connect("response", on_response)
         dialog.present(self)
-
-    def _on_open_device(self, btn):
-        devices = _list_video_devices()
-        if not devices:
-            dialog = Adw.AlertDialog()
-            dialog.set_heading(_("No Video Devices"))
-            dialog.set_body(_("No video capture devices were found.\n"
-                              "Connect a webcam or USB camera and try again."))
-            dialog.add_response("ok", _("OK"))
-            dialog.present(self)
-            return
-
-        dialog = Adw.AlertDialog()
-        dialog.set_heading(_("Select Video Device"))
-        dialog.set_body(_("Choose a camera to use for live plate detection."))
-        dialog.add_response("cancel", _("Cancel"))
-        dialog.add_response("open", _("Open"))
-        dialog.set_response_appearance("open", Adw.ResponseAppearance.SUGGESTED)
-
-        listbox = Gtk.ListBox()
-        listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        listbox.add_css_class("boxed-list")
-
-        for dev in devices:
-            row = Adw.ActionRow(title=dev["name"], subtitle=dev["path"])
-            row._device_path = dev["path"]
-            listbox.append(row)
-
-        listbox.select_row(listbox.get_row_at_index(0))
-        dialog.set_extra_child(listbox)
-
-        def on_response(dlg, response):
-            if response == "open":
-                selected = listbox.get_selected_row()
-                if selected:
-                    self._start_live_device(selected._device_path)
-
-        dialog.connect("response", on_response)
-        dialog.present(self)
-
-    def _start_live_device(self, device_path):
-        self._video_path = None
-        self._device_path = device_path
-        self._video_widget.set_visible(False)
-        self._video_status.set_visible(True)
-        self._video_status.set_icon_name("camera-web-symbolic")
-        self._video_status.set_title(_("Live Camera — %s") % device_path)
-        self._video_status.set_description(_("Scanning for plates in real-time..."))
-        self._process_btn.set_label(_("Stop"))
-        self._process_btn.set_sensitive(True)
-        self._process_btn.remove_css_class("suggested-action")
-        self._process_btn.add_css_class("destructive-action")
-        self._processing = True
-        self._progress.set_visible(True)
-        self._progress.pulse()
-        threading.Thread(target=self._scan_device, args=(device_path,), daemon=True).start()
-
-    def _scan_device(self, device_path):
-        """Live scan from a video device."""
-        seen_plates = set()
-        frame_count = 0
-        while self._processing:
-            frame = _capture_device_frame(device_path)
-            if frame:
-                frame_count += 1
-                plates = _find_plates_tesseract(frame)
-                for p in plates:
-                    if "error" in p:
-                        GLib.idle_add(self._status.set_text, p["error"])
-                        GLib.idle_add(self._scan_done)
-                        return
-                    plate_text = p["plate"]
-                    if plate_text not in seen_plates:
-                        seen_plates.add(plate_text)
-                        entry = self.plate_log.add(
-                            plate_text, p["confidence"], p.get("source", ""),
-                            frame_path=frame
-                        )
-                        GLib.idle_add(self._add_plate_row, entry)
-                try:
-                    os.unlink(frame)
-                except:
-                    pass
-                GLib.idle_add(self._progress.pulse)
-                GLib.idle_add(self._status.set_text,
-                              _("Live scan — %(frames)d frames, %(count)d plates found") %
-                              {"frames": frame_count, "count": len(seen_plates)})
-            time.sleep(1)  # ~1 fps for OCR processing
-        GLib.idle_add(self._scan_done)
 
     def _on_drop(self, drop_target, value, x, y):
         if isinstance(value, Gio.File):
@@ -862,7 +700,7 @@ class ANPRApp(Adw.Application):
             website="https://github.com/yeager/anpr-viewer",
             license_type=Gtk.License.GPL_3_0,
             issue_url="https://github.com/yeager/anpr-viewer/issues",
-            comments=_("Automatic license plate recognition from video files, streams, and cameras."),
+            comments=_("Automatic license plate recognition from video streams and files."),
         )
         dialog.present(self.window)
 

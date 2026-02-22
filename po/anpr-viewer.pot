@@ -1,14 +1,14 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
-# This file is distributed under the same license as the PACKAGE package.
+# This file is distributed under the same license as the anpr-viewer package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: anpr-viewer 0.3.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-02-22 06:32+0100\n"
+"POT-Creation-Date: 2026-02-22 07:01+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -21,213 +21,255 @@ msgstr ""
 msgid "tesseract not installed — install with: brew install tesseract"
 msgstr ""
 
-#: src/anpr_viewer/main.py:142 src/anpr_viewer/main.py:696
+#: src/anpr_viewer/main.py:208 src/anpr_viewer/main.py:858
 msgid "ANPR Viewer"
 msgstr ""
 
-#: src/anpr_viewer/main.py:153
+#: src/anpr_viewer/main.py:220
 msgid "ANPR Viewer — License Plate Recognition"
 msgstr ""
 
-#: src/anpr_viewer/main.py:156
+#: src/anpr_viewer/main.py:223
 msgid "Open video file"
 msgstr ""
 
-#: src/anpr_viewer/main.py:161
+#: src/anpr_viewer/main.py:228
+msgid "Open video device"
+msgstr ""
+
+#: src/anpr_viewer/main.py:233
 msgid "Open video stream URL"
 msgstr ""
 
-#: src/anpr_viewer/main.py:166 src/anpr_viewer/main.py:417
-#: src/anpr_viewer/main.py:481
+#: src/anpr_viewer/main.py:238 src/anpr_viewer/main.py:579
+#: src/anpr_viewer/main.py:643
 msgid "Scan Video"
 msgstr ""
 
-#: src/anpr_viewer/main.py:174 src/anpr_viewer/main.py:599
+#: src/anpr_viewer/main.py:246 src/anpr_viewer/main.py:761
 msgid "Settings"
 msgstr ""
 
-#: src/anpr_viewer/main.py:175
+#: src/anpr_viewer/main.py:247
 msgid "Export Log"
 msgstr ""
 
-#: src/anpr_viewer/main.py:176
+#: src/anpr_viewer/main.py:248
 msgid "Clear Log"
 msgstr ""
 
-#: src/anpr_viewer/main.py:177
+#: src/anpr_viewer/main.py:249
 msgid "Copy Debug Info"
 msgstr ""
 
-#: src/anpr_viewer/main.py:178
+#: src/anpr_viewer/main.py:250
 msgid "Keyboard Shortcuts"
 msgstr ""
 
-#: src/anpr_viewer/main.py:179
+#: src/anpr_viewer/main.py:251
 msgid "About ANPR Viewer"
 msgstr ""
 
-#: src/anpr_viewer/main.py:199
+#: src/anpr_viewer/main.py:271
 msgid "No video loaded"
 msgstr ""
 
-#: src/anpr_viewer/main.py:200
+#: src/anpr_viewer/main.py:272
 msgid ""
-"Open a video file or drag & drop one here.\n"
+"Open a video file, connect a camera, or drag & drop.\n"
 "You can also enter a stream URL."
 msgstr ""
 
-#: src/anpr_viewer/main.py:229
+#: src/anpr_viewer/main.py:301
 msgid "Detected Plates"
 msgstr ""
 
-#: src/anpr_viewer/main.py:255
+#: src/anpr_viewer/main.py:327
 msgid "Ready"
 msgstr ""
 
-#: src/anpr_viewer/main.py:304
+#: src/anpr_viewer/main.py:376
 msgid "Welcome"
 msgstr ""
 
-#: src/anpr_viewer/main.py:310
+#: src/anpr_viewer/main.py:382
 msgid "Welcome to ANPR Viewer"
 msgstr ""
 
-#: src/anpr_viewer/main.py:312
+#: src/anpr_viewer/main.py:384
 msgid ""
 "Automatic license plate recognition from video.\\n\\n✓ Open video files or "
-"live streams\\n✓ Drag & drop support\\n✓ Detected plates listed in real-"
-"time\\n✓ Log results to file\\n✓ Export as CSV or JSON"
-msgstr ""
-
-#: src/anpr_viewer/main.py:320
-msgid "Get Started"
-msgstr ""
-
-#: src/anpr_viewer/main.py:343
-msgid "Open Video File"
-msgstr ""
-
-#: src/anpr_viewer/main.py:345
-msgid "Video files"
-msgstr ""
-
-#: src/anpr_viewer/main.py:363
-msgid "Open Video Stream"
-msgstr ""
-
-#: src/anpr_viewer/main.py:364
-msgid "Enter the URL of a video stream (RTSP, HTTP, etc.)"
-msgstr ""
-
-#: src/anpr_viewer/main.py:365
-msgid "Cancel"
-msgstr ""
-
-#: src/anpr_viewer/main.py:366
-msgid "Open"
+"live streams\\n✓ Live capture from webcams and USB cameras\\n✓ Drag & drop "
+"support\\n✓ Detected plates listed in real-time\\n✓ Log results to file\\n✓ "
+"Export as CSV or JSON"
 msgstr ""
 
 #: src/anpr_viewer/main.py:393
+msgid "Get Started"
+msgstr ""
+
+#: src/anpr_viewer/main.py:416
+msgid "Open Video File"
+msgstr ""
+
+#: src/anpr_viewer/main.py:418
+msgid "Video files"
+msgstr ""
+
+#: src/anpr_viewer/main.py:436
+msgid "Open Video Stream"
+msgstr ""
+
+#: src/anpr_viewer/main.py:437
+msgid "Enter the URL of a video stream (RTSP, HTTP, etc.)"
+msgstr ""
+
+#: src/anpr_viewer/main.py:438 src/anpr_viewer/main.py:469
+msgid "Cancel"
+msgstr ""
+
+#: src/anpr_viewer/main.py:439 src/anpr_viewer/main.py:470
+msgid "Open"
+msgstr ""
+
+#: src/anpr_viewer/main.py:459
+msgid "No Video Devices"
+msgstr ""
+
+#: src/anpr_viewer/main.py:460
+msgid ""
+"No video capture devices were found.\n"
+"Connect a webcam or USB camera and try again."
+msgstr ""
+
+#: src/anpr_viewer/main.py:462
+msgid "OK"
+msgstr ""
+
+#: src/anpr_viewer/main.py:467
+msgid "Select Video Device"
+msgstr ""
+
+#: src/anpr_viewer/main.py:468
+msgid "Choose a camera to use for live plate detection."
+msgstr ""
+
+#: src/anpr_viewer/main.py:500
+#, python-format
+msgid "Live Camera — %s"
+msgstr ""
+
+#: src/anpr_viewer/main.py:501
+msgid "Scanning for plates in real-time..."
+msgstr ""
+
+#: src/anpr_viewer/main.py:502 src/anpr_viewer/main.py:584
+msgid "Stop"
+msgstr ""
+
+#: src/anpr_viewer/main.py:539
+#, python-format
+msgid "Live scan — %(frames)d frames, %(count)d plates found"
+msgstr ""
+
+#: src/anpr_viewer/main.py:555
 #, python-format
 msgid "Loaded: %s"
 msgstr ""
 
-#: src/anpr_viewer/main.py:401
+#: src/anpr_viewer/main.py:563
 msgid "Stream loaded. Click 'Scan Video' to detect plates."
 msgstr ""
 
-#: src/anpr_viewer/main.py:409
+#: src/anpr_viewer/main.py:571
 msgid "Video loaded. Click 'Scan Video' to detect plates."
 msgstr ""
 
-#: src/anpr_viewer/main.py:418
+#: src/anpr_viewer/main.py:580
 msgid "Scan stopped"
 msgstr ""
 
-#: src/anpr_viewer/main.py:422
-msgid "Stop"
-msgstr ""
-
-#: src/anpr_viewer/main.py:426
+#: src/anpr_viewer/main.py:588
 msgid "Scanning..."
 msgstr ""
 
-#: src/anpr_viewer/main.py:473
+#: src/anpr_viewer/main.py:635
 #, python-format
 msgid "Scanning... %(time).0fs / %(total).0fs — %(count)d plates found"
 msgstr ""
 
-#: src/anpr_viewer/main.py:488
+#: src/anpr_viewer/main.py:650
 #, python-format
 msgid "%(time)s — Scan complete. %(count)d plates in log."
 msgstr ""
 
-#: src/anpr_viewer/main.py:550
+#: src/anpr_viewer/main.py:712
 #, python-format
 msgid "Copied: %s"
 msgstr ""
 
-#: src/anpr_viewer/main.py:604
+#: src/anpr_viewer/main.py:766
 msgid "OCR Engine"
 msgstr ""
 
-#: src/anpr_viewer/main.py:605
+#: src/anpr_viewer/main.py:767
 msgid "Engine"
 msgstr ""
 
-#: src/anpr_viewer/main.py:611
+#: src/anpr_viewer/main.py:773
 msgid "Minimum Confidence (%)"
 msgstr ""
 
-#: src/anpr_viewer/main.py:617
+#: src/anpr_viewer/main.py:779
 msgid "Region"
 msgstr ""
 
-#: src/anpr_viewer/main.py:618
+#: src/anpr_viewer/main.py:780
 msgid "Plate Format"
 msgstr ""
 
-#: src/anpr_viewer/main.py:624
+#: src/anpr_viewer/main.py:786
 msgid "Logging"
 msgstr ""
 
-#: src/anpr_viewer/main.py:625
+#: src/anpr_viewer/main.py:787
 msgid "Log detections to file"
 msgstr ""
 
-#: src/anpr_viewer/main.py:637
+#: src/anpr_viewer/main.py:799
 msgid "Export Plate Log"
 msgstr ""
 
-#: src/anpr_viewer/main.py:651
+#: src/anpr_viewer/main.py:813
 #, python-format
 msgid "Exported to %s"
 msgstr ""
 
-#: src/anpr_viewer/main.py:660
+#: src/anpr_viewer/main.py:822
 msgid "Log cleared"
 msgstr ""
 
-#: src/anpr_viewer/main.py:676
+#: src/anpr_viewer/main.py:838
 msgid "Debug info copied"
 msgstr ""
 
-#: src/anpr_viewer/main.py:682
+#: src/anpr_viewer/main.py:844
 msgid "General"
 msgstr ""
 
-#: src/anpr_viewer/main.py:684
+#: src/anpr_viewer/main.py:846
 msgid "Quit"
 msgstr ""
 
-#: src/anpr_viewer/main.py:685
+#: src/anpr_viewer/main.py:847
 msgid "Export log"
 msgstr ""
 
-#: src/anpr_viewer/main.py:686
+#: src/anpr_viewer/main.py:848
 msgid "Keyboard shortcuts"
 msgstr ""
 
-#: src/anpr_viewer/main.py:703
-msgid "Automatic license plate recognition from video streams and files."
+#: src/anpr_viewer/main.py:865
+msgid ""
+"Automatic license plate recognition from video files, streams, and cameras."
 msgstr ""
