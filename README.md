@@ -1,11 +1,11 @@
 # ANPR Viewer
 
-Registreringsskyltavläsning från video och webbkameror.
+License plate recognition from video files and webcams.
 Tesseract OCR + ffmpeg.
 
-GTK4/Adwaita · Python · v0.3.1 · 60 översättningsbara strängar
+GTK4/Adwaita · Python · v0.3.1 · 60 translatable strings
 
-## Installation
+## Install
 
 ### Ubuntu / Debian
 ```bash
@@ -19,10 +19,10 @@ sudo dnf install anpr-viewer
 ```
 Repo: [yeager/rpm-repo](https://github.com/yeager/rpm-repo)
 
-## Översättning
+## Translation
 
-Översätts via [Transifex](https://app.transifex.com/danielnylander/anpr-viewer/). 11 språk.
+Translated via [Transifex](https://app.transifex.com/danielnylander/anpr-viewer/). 11 languages.
 
-## Licens
+## License
 
 GPL-3.0-or-later · Daniel Nylander <daniel@danielnylander.se>
