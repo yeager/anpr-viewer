@@ -1,28 +1,25 @@
 # ANPR Viewer
 
-License plate recognition from video files and webcams.
-Tesseract OCR + ffmpeg.
+License plate recognition from video streams and files using Tesseract OCR and ffmpeg.
 
-GTK4/Adwaita · Python · v0.3.1 · 60 translatable strings
+Built with GTK4/Adwaita. Part of the [Danne L10n Suite](https://github.com/yeager/debian-repo).
 
-## Install
+## Installation
 
-### Ubuntu / Debian
+### Debian/Ubuntu
 ```bash
 sudo apt install anpr-viewer
 ```
-Repo: [yeager/debian-repo](https://github.com/yeager/debian-repo)
 
-### Fedora
+### Fedora/RPM
 ```bash
 sudo dnf install anpr-viewer
 ```
-Repo: [yeager/rpm-repo](https://github.com/yeager/rpm-repo)
-
-## Translation
-
-Translated via [Transifex](https://app.transifex.com/danielnylander/anpr-viewer/). 11 languages.
 
 ## License
 
-GPL-3.0-or-later · Daniel Nylander <daniel@danielnylander.se>
+GPL-3.0
+
+## Author
+
+Daniel Nylander — [danielnylander.se](https://danielnylander.se)
