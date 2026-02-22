@@ -1,37 +1,28 @@
 # ANPR Viewer
 
-GTK4/Adwaita application for automatic license plate recognition (ANPR) from video files and streams.
+Registreringsskyltavläsning från video och webbkameror.
+Tesseract OCR + ffmpeg.
 
-## Features
+GTK4/Adwaita · Python · v0.3.1 · 60 översättningsbara strängar
 
-- Open video files (MP4, AVI, MKV, MOV, etc.)
-- Open RTSP/HTTP video streams
-- Drag & drop video files
-- Real-time plate detection with Tesseract OCR
-- Plate list with timestamps and confidence scores
-- Copy plates to clipboard
-- Export log as CSV
-- Configurable OCR engine and confidence threshold
-- Swedish/English UI
+## Installation
 
-## Dependencies
-
-- Python 3.10+
-- GTK4, libadwaita
-- Tesseract OCR (`brew install tesseract` / `apt install tesseract-ocr`)
-- FFmpeg (`brew install ffmpeg` / `apt install ffmpeg`)
-
-## Install
-
+### Ubuntu / Debian
 ```bash
-pip install -e .
-anpr-viewer
+sudo apt install anpr-viewer
 ```
+Repo: [yeager/debian-repo](https://github.com/yeager/debian-repo)
 
-## Screenshot
+### Fedora
+```bash
+sudo dnf install anpr-viewer
+```
+Repo: [yeager/rpm-repo](https://github.com/yeager/rpm-repo)
 
-![ANPR Viewer](screenshots/anpr-viewer_en.png)
+## Översättning
 
-## License
+Översätts via [Transifex](https://app.transifex.com/danielnylander/anpr-viewer/). 11 språk.
 
-GPL-3.0-or-later
+## Licens
+
+GPL-3.0-or-later · Daniel Nylander <daniel@danielnylander.se>
