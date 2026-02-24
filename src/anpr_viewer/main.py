@@ -15,6 +15,7 @@ import time
 import datetime
 import re
 import subprocess
+import shutil
 import tempfile
 from anpr_viewer.accessibility import AccessibilityManager
 
@@ -33,6 +34,95 @@ SETTINGS_DIR = os.path.join(
 )
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
 LOG_DIR = os.path.join(SETTINGS_DIR, "logs")
+
+# Supported URL schemes
+SUPPORTED_SCHEMES = {
+    "file": _("Local video files (mp4, avi, mkv, mov, webm, etc.)"),
+    "http/https": _("Direct video URLs and web streams"),
+    "rtsp": _("Real-Time Streaming Protocol (IP cameras)"),
+    "rtmp": _("Real-Time Messaging Protocol (live streams)"),
+    "youtube": _("YouTube URLs (via yt-dlp)"),
+    "yt-dlp": _("Any site supported by yt-dlp (1000+ sites)"),
+}
+
+
+def _find_yt_dlp():
+    """Find yt-dlp binary."""
+    path = shutil.which("yt-dlp")
+    if path:
+        return path
+    # Check common user install location
+    local_bin = os.path.expanduser("~/.local/bin/yt-dlp")
+    if os.path.isfile(local_bin) and os.access(local_bin, os.X_OK):
+        return local_bin
+    return None
+
+
+def _is_yt_dlp_url(url):
+    """Check if a URL should be resolved via yt-dlp (YouTube, etc.)."""
+    yt_patterns = [
+        r'(youtube\.com|youtu\.be)',
+        r'(vimeo\.com)',
+        r'(twitch\.tv)',
+        r'(dailymotion\.com)',
+        r'(facebook\.com.*/videos/)',
+        r'(twitter\.com|x\.com)',
+        r'(instagram\.com)',
+        r'(tiktok\.com)',
+    ]
+    for pat in yt_patterns:
+        if re.search(pat, url, re.IGNORECASE):
+            return True
+    return False
+
+
+def _resolve_url(url, status_callback=None):
+    """Resolve a URL to a direct video URL using yt-dlp if needed.
+
+    Returns (resolved_url, title, duration_seconds_or_None, error_or_None).
+    """
+    if not url.startswith(("http://", "https://")):
+        return url, None, None, None
+
+    if not _is_yt_dlp_url(url):
+        # Direct URL — try to get duration via ffprobe
+        return url, None, None, None
+
+    yt_dlp = _find_yt_dlp()
+    if not yt_dlp:
+        return None, None, None, _("yt-dlp not found. Install with: pip3 install yt-dlp")
+
+    if status_callback:
+        GLib.idle_add(status_callback, _("Resolving URL via yt-dlp..."))
+
+    try:
+        r = subprocess.run(
+            [yt_dlp, "--dump-json", "--no-playlist", url],
+            capture_output=True, text=True, timeout=30
+        )
+        if r.returncode != 0:
+            return None, None, None, _("yt-dlp error: %s") % r.stderr.strip()[:200]
+        info = json.loads(r.stdout)
+        video_url = info.get("url")
+        title = info.get("title", "")
+        duration = info.get("duration")
+
+        if not video_url:
+            # Fall back to getting the URL directly
+            r2 = subprocess.run(
+                [yt_dlp, "-g", "--no-playlist", "-f", "best[ext=mp4]/best", url],
+                capture_output=True, text=True, timeout=30
+            )
+            if r2.returncode == 0:
+                video_url = r2.stdout.strip().split('\n')[0]
+            else:
+                return None, None, None, _("Could not extract video URL")
+
+        return video_url, title, duration, None
+    except subprocess.TimeoutExpired:
+        return None, None, None, _("yt-dlp timed out")
+    except Exception as e:
+        return None, None, None, str(e)
 
 
 def _load_settings():
@@ -61,11 +151,10 @@ def _find_plates_tesseract(frame_path):
         )
         if r.returncode == 0:
             text = r.stdout.strip()
-            # Look for plate-like patterns (EU/Swedish: ABC 123 or ABC123)
             patterns = [
-                r'[A-Z]{3}\s?\d{3}',        # Swedish: ABC 123
-                r'[A-Z]{2,3}\s?\d{2,4}\s?[A-Z]?',  # Generic EU
-                r'\d{1,4}\s?[A-Z]{2,3}',     # Some EU reversed
+                r'[A-Z]{3}\s?\d{3}',
+                r'[A-Z]{2,3}\s?\d{2,4}\s?[A-Z]?',
+                r'\d{1,4}\s?[A-Z]{2,3}',
             ]
             plates = []
             for pat in patterns:
@@ -75,7 +164,7 @@ def _find_plates_tesseract(frame_path):
                         plates.append({"plate": plate, "confidence": 75, "source": "tesseract"})
             return plates
     except FileNotFoundError:
-        return [{"error": _("tesseract not installed — install with: brew install tesseract")}]
+        return [{"error": _("tesseract not installed — install with: sudo apt install tesseract-ocr")}]
     except Exception as e:
         return [{"error": str(e)}]
     return []
@@ -96,6 +185,19 @@ def _extract_frame(video_path, timestamp=0):
     except:
         pass
     return None
+
+
+def _get_video_duration(path):
+    """Get video duration in seconds. Returns None on failure."""
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, text=True, timeout=10
+        )
+        return float(r.stdout.strip())
+    except:
+        return None
 
 
 def _capture_device_frame(device_path):
@@ -121,13 +223,11 @@ def _list_video_devices():
     """List available video capture devices."""
     devices = []
     if sys.platform == "darwin":
-        # macOS: use ffmpeg AVFoundation listing
         try:
             r = subprocess.run(
                 ["ffmpeg", "-f", "avfoundation", "-list_devices", "true", "-i", ""],
                 capture_output=True, text=True, timeout=5
             )
-            # Parse stderr for video devices (before audio section)
             in_video = False
             for line in r.stderr.splitlines():
                 if "AVFoundation video devices:" in line:
@@ -143,7 +243,6 @@ def _list_video_devices():
         except:
             pass
     else:
-        # Linux: enumerate /dev/video*
         import glob
         for dev in sorted(glob.glob("/dev/video*")):
             name = dev
@@ -211,7 +310,10 @@ class ANPRWindow(Adw.ApplicationWindow):
         self.plate_log = PlateLog()
         self._processing = False
         self._video_path = None
+        self._original_url = None  # Original URL before yt-dlp resolution
+        self._video_duration = None
         self._device_path = None
+        self._local_video_file = None  # For yt-dlp downloaded files
 
         # Main layout
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -260,36 +362,45 @@ class ANPRWindow(Adw.ApplicationWindow):
         paned.set_vexpand(True)
 
         # Left: video preview
-        left_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        left_box.set_size_request(500, -1)
+        self._left_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._left_box.set_size_request(500, -1)
 
-        # Drop target for drag & drop
+        # Drop target for drag & drop (on the whole left box)
         drop_target = Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY)
         drop_target.connect("drop", self._on_drop)
+        self._left_box.add_controller(drop_target)
+
+        # Also accept text drops (for URLs)
+        drop_target_text = Gtk.DropTarget.new(GLib.GType.from_name("gchararray"), Gdk.DragAction.COPY)
+        drop_target_text.connect("drop", self._on_drop_text)
+        self._left_box.add_controller(drop_target_text)
 
         self._video_status = Adw.StatusPage()
         self._video_status.set_icon_name("video-x-generic-symbolic")
         self._video_status.set_title(_("No video loaded"))
-        self._video_status.set_description(_("Open a video file, connect a camera, or drag & drop.\nYou can also enter a stream URL."))
-        self._video_status.add_controller(drop_target)
+        desc_text = _(
+            "Open a video file, connect a camera, or drag & drop a file or URL.\n"
+            "You can also enter a stream URL (YouTube, RTSP, HTTP, etc.)."
+        )
+        self._video_status.set_description(desc_text)
         self._video_status.set_vexpand(True)
 
-        # Video player widget (GTK4 built-in)
+        # Video player widget
         self._video_widget = Gtk.Video()
         self._video_widget.set_vexpand(True)
         self._video_widget.set_visible(False)
-        self._video_widget.set_autoplay(True)
-        self._video_widget.set_loop(True)
+        self._video_widget.set_autoplay(False)
+        self._video_widget.set_loop(False)
 
-        left_box.append(self._video_status)
-        left_box.append(self._video_widget)
+        self._left_box.append(self._video_status)
+        self._left_box.append(self._video_widget)
 
         # Progress bar
         self._progress = Gtk.ProgressBar()
         self._progress.set_visible(False)
-        left_box.append(self._progress)
+        self._left_box.append(self._progress)
 
-        paned.set_start_child(left_box)
+        paned.set_start_child(self._left_box)
 
         # Right: plate list
         right_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -375,35 +486,89 @@ class ANPRWindow(Adw.ApplicationWindow):
     def _show_welcome(self):
         dialog = Adw.Dialog()
         dialog.set_title(_("Welcome"))
-        dialog.set_content_width(420)
-        dialog.set_content_height(480)
-
-        page = Adw.StatusPage()
-        page.set_icon_name("camera-video-symbolic")
-        page.set_title(_("Welcome to ANPR Viewer"))
-        page.set_description(_(
-            "Automatic license plate recognition from video.\\n\\n"
-            "✓ Open video files or live streams\\n"
-            "✓ Live capture from webcams and USB cameras\\n"
-            "✓ Drag & drop support\\n"
-            "✓ Detected plates listed in real-time\\n"
-            "✓ Log results to file\\n"
-            "✓ Export as CSV or JSON"
-        ))
-
-        btn = Gtk.Button(label=_("Get Started"))
-        btn.add_css_class("suggested-action")
-        btn.add_css_class("pill")
-        btn.set_halign(Gtk.Align.CENTER)
-        btn.set_margin_top(12)
-        btn.connect("clicked", self._on_welcome_close, dialog)
-        page.set_child(btn)
+        dialog.set_content_width(500)
+        dialog.set_content_height(580)
 
         box = Adw.ToolbarView()
         hb = Adw.HeaderBar()
         hb.set_show_title(False)
         box.add_top_bar(hb)
-        box.set_content(page)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content_box.set_margin_start(24)
+        content_box.set_margin_end(24)
+        content_box.set_margin_top(16)
+        content_box.set_margin_bottom(24)
+
+        # Icon
+        icon = Gtk.Image.new_from_icon_name("camera-video-symbolic")
+        icon.set_pixel_size(64)
+        icon.add_css_class("dim-label")
+        content_box.append(icon)
+
+        # Title
+        title = Gtk.Label(label=_("Welcome to ANPR Viewer"))
+        title.add_css_class("title-1")
+        title.set_wrap(True)
+        title.set_wrap_mode(2)  # WORD_CHAR
+        title.set_justify(Gtk.Justification.CENTER)
+        content_box.append(title)
+
+        # Description
+        desc = Gtk.Label(label=_("Automatic license plate recognition from video files, live streams, and cameras."))
+        desc.set_wrap(True)
+        desc.set_wrap_mode(2)
+        desc.set_justify(Gtk.Justification.CENTER)
+        desc.add_css_class("dim-label")
+        content_box.append(desc)
+
+        # Features
+        features_group = Adw.PreferencesGroup(title=_("Features"))
+        features = [
+            ("document-open-symbolic", _("Open video files or paste URLs")),
+            ("camera-web-symbolic", _("Live capture from webcams and USB cameras")),
+            ("emblem-shared-symbolic", _("Drag & drop files and URLs")),
+            ("view-list-symbolic", _("Detected plates listed in real-time")),
+            ("document-save-symbolic", _("Log and export results as CSV/JSON")),
+        ]
+        for icon_name, label_text in features:
+            row = Adw.ActionRow(title=label_text)
+            row.add_prefix(Gtk.Image.new_from_icon_name(icon_name))
+            features_group.add(row)
+        content_box.append(features_group)
+
+        # Supported sources
+        sources_group = Adw.PreferencesGroup(title=_("Supported Sources"))
+        for scheme, description in SUPPORTED_SCHEMES.items():
+            row = Adw.ActionRow(title=scheme.upper(), subtitle=description)
+            row.set_subtitle_lines(2)
+            sources_group.add(row)
+        content_box.append(sources_group)
+
+        # yt-dlp status
+        yt_dlp = _find_yt_dlp()
+        if yt_dlp:
+            yt_label = Gtk.Label(label=_("✓ yt-dlp found — YouTube and 1000+ sites supported"))
+            yt_label.add_css_class("success")
+        else:
+            yt_label = Gtk.Label(label=_("⚠ yt-dlp not found — install for YouTube support: pip3 install yt-dlp"))
+            yt_label.add_css_class("warning")
+        yt_label.set_wrap(True)
+        yt_label.set_wrap_mode(2)
+        content_box.append(yt_label)
+
+        btn = Gtk.Button(label=_("Get Started"))
+        btn.add_css_class("suggested-action")
+        btn.add_css_class("pill")
+        btn.set_halign(Gtk.Align.CENTER)
+        btn.connect("clicked", self._on_welcome_close, dialog)
+        content_box.append(btn)
+
+        scroll.set_child(content_box)
+        box.set_content(scroll)
         dialog.set_child(box)
         dialog.present(self)
 
@@ -429,26 +594,32 @@ class ANPRWindow(Adw.ApplicationWindow):
             f = dialog.open_finish(result)
             path = f.get_path()
             self._load_video(path)
+            self._prompt_scan()
         except:
             pass
 
     def _on_open_stream(self, btn):
         dialog = Adw.AlertDialog()
         dialog.set_heading(_("Open Video Stream"))
-        dialog.set_body(_("Enter the URL of a video stream (RTSP, HTTP, etc.)"))
+        dialog.set_body(_(
+            "Enter a URL to scan for license plates.\n\n"
+            "Supported: YouTube, HTTP/HTTPS, RTSP, RTMP, "
+            "and any URL supported by yt-dlp."
+        ))
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("open", _("Open"))
         dialog.set_response_appearance("open", Adw.ResponseAppearance.SUGGESTED)
 
         entry = Gtk.Entry()
-        entry.set_placeholder_text("rtsp://192.168.1.100:554/stream")
+        entry.set_placeholder_text("https://youtube.com/watch?v=... or rtsp://...")
+        entry.set_hexpand(True)
         dialog.set_extra_child(entry)
 
         def on_response(dlg, response):
             if response == "open":
                 url = entry.get_text().strip()
                 if url:
-                    self._load_video(url)
+                    self._load_url(url)
 
         dialog.connect("response", on_response)
         dialog.present(self)
@@ -539,7 +710,7 @@ class ANPRWindow(Adw.ApplicationWindow):
                 GLib.idle_add(self._status.set_text,
                               _("Live scan — %(frames)d frames, %(count)d plates found") %
                               {"frames": frame_count, "count": len(seen_plates)})
-            time.sleep(1)  # ~1 fps for OCR processing
+            time.sleep(1)
         GLib.idle_add(self._scan_done)
 
     def _on_drop(self, drop_target, value, x, y):
@@ -547,30 +718,119 @@ class ANPRWindow(Adw.ApplicationWindow):
             path = value.get_path()
             if path:
                 self._load_video(path)
+                # Auto-start scanning on drag & drop
+                GLib.idle_add(self._start_scan)
                 return True
         return False
 
-    def _load_video(self, path):
+    def _on_drop_text(self, drop_target, value, x, y):
+        """Handle text drops (URLs)."""
+        if isinstance(value, str):
+            url = value.strip()
+            if url.startswith(("http://", "https://", "rtsp://", "rtmp://")):
+                self._load_url(url)
+                return True
+        return False
+
+    def _load_url(self, url):
+        """Load a URL, resolving via yt-dlp if needed."""
+        self._original_url = url
+        self._status.set_text(_("Loading: %s") % url)
+
+        if _is_yt_dlp_url(url):
+            # Resolve in background thread
+            self._video_status.set_visible(True)
+            self._video_widget.set_visible(False)
+            self._video_status.set_icon_name("content-loading-symbolic")
+            self._video_status.set_title(_("Resolving URL..."))
+            self._video_status.set_description(url)
+            threading.Thread(target=self._resolve_and_load, args=(url,), daemon=True).start()
+        else:
+            self._load_video(url)
+            self._prompt_scan()
+
+    def _resolve_and_load(self, url):
+        """Resolve URL via yt-dlp in background, then load."""
+        resolved, title, duration, error = _resolve_url(url, self._status.set_text)
+        if error:
+            GLib.idle_add(self._status.set_text, error)
+            GLib.idle_add(self._video_status.set_title, _("Error"))
+            GLib.idle_add(self._video_status.set_description, error)
+            GLib.idle_add(self._video_status.set_icon_name, "dialog-error-symbolic")
+            return
+
+        self._video_duration = duration
+        if title:
+            GLib.idle_add(self._status.set_text, _("Resolved: %s") % title)
+
+        GLib.idle_add(self._load_video, resolved, title)
+        GLib.idle_add(self._prompt_scan)
+
+    def _load_video(self, path, title=None):
+        """Load a video path/URL into the viewer."""
         self._video_path = path
         self._process_btn.set_sensitive(True)
-        self._status.set_text(_("Loaded: %s") % path)
+        display_name = title or (os.path.basename(path) if os.path.isfile(path) else path)
+        self._status.set_text(_("Loaded: %s") % display_name)
 
-        # Show video in player
+        # Show video preview
         try:
-            if path.startswith(("rtsp://", "http://", "https://")):
-                self._video_widget.set_filename(None)
-                # For streams, show status instead
-                self._video_status.set_title(path)
-                self._video_status.set_description(_("Stream loaded. Click 'Scan Video' to detect plates."))
-                self._video_status.set_icon_name("emblem-ok-symbolic")
-            else:
-                self._video_widget.set_filename(path)
+            if os.path.isfile(path):
+                f = Gio.File.new_for_path(path)
+                media = Gtk.MediaFile.new_for_file(f)
+                media.set_muted(True)
+                self._video_widget.set_media_stream(media)
                 self._video_widget.set_visible(True)
                 self._video_status.set_visible(False)
+                # Get duration
+                if not self._video_duration:
+                    self._video_duration = _get_video_duration(path)
+            else:
+                # Stream/URL — show info in status page
+                self._video_widget.set_visible(False)
+                self._video_status.set_visible(True)
+                self._video_status.set_icon_name("emblem-ok-symbolic")
+                self._video_status.set_title(title or path)
+                dur_str = ""
+                if self._video_duration:
+                    m, s = divmod(int(self._video_duration), 60)
+                    dur_str = f" ({m}:{s:02d})"
+                self._video_status.set_description(
+                    _("Ready to scan.") + dur_str
+                )
         except Exception:
-            self._video_status.set_title(os.path.basename(path) if os.path.exists(path) else path)
-            self._video_status.set_description(_("Video loaded. Click 'Scan Video' to detect plates."))
+            self._video_status.set_visible(True)
+            self._video_widget.set_visible(False)
+            self._video_status.set_title(display_name)
+            self._video_status.set_description(_("Ready to scan."))
             self._video_status.set_icon_name("emblem-ok-symbolic")
+
+    def _prompt_scan(self):
+        """Show a dialog asking user if they want to start scanning."""
+        if self._processing:
+            return
+        dialog = Adw.AlertDialog()
+        dialog.set_heading(_("Start Scanning?"))
+        name = self._original_url or self._video_path or ""
+        if len(name) > 60:
+            name = name[:57] + "..."
+        dialog.set_body(_("Video loaded: %s\n\nStart scanning for license plates now?") % name)
+        dialog.add_response("later", _("Later"))
+        dialog.add_response("scan", _("Start Scanning"))
+        dialog.set_response_appearance("scan", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("scan")
+
+        def on_response(dlg, response):
+            if response == "scan":
+                self._start_scan()
+
+        dialog.connect("response", on_response)
+        dialog.present(self)
+
+    def _start_scan(self):
+        """Programmatically start scanning."""
+        if self._video_path and not self._processing:
+            self._on_process(self._process_btn)
 
     def _on_process(self, btn):
         if not self._video_path:
@@ -593,16 +853,14 @@ class ANPRWindow(Adw.ApplicationWindow):
     def _scan_video(self):
         """Scan video for plates by extracting frames."""
         path = self._video_path
-        # Get duration
-        try:
-            r = subprocess.run(
-                ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
-                 "-of", "default=noprint_wrappers=1:nokey=1", path],
-                capture_output=True, text=True, timeout=10
-            )
-            duration = float(r.stdout.strip())
-        except:
-            duration = 60  # default
+
+        # Get duration — no artificial limits
+        duration = self._video_duration or _get_video_duration(path)
+        if duration is None:
+            # Last resort: scan up to 10 minutes for unknown-duration streams
+            duration = 600
+            GLib.idle_add(self._status.set_text,
+                          _("Unknown duration — scanning up to 10 minutes..."))
 
         interval = 2  # seconds between frames
         seen_plates = set()
@@ -632,12 +890,26 @@ class ANPRWindow(Adw.ApplicationWindow):
 
             progress = min(t / duration, 1.0)
             GLib.idle_add(self._progress.set_fraction, progress)
+
+            # Sync video preview with scan progress
+            GLib.idle_add(self._seek_preview, t)
+
             GLib.idle_add(self._status.set_text,
                           _("Scanning... %(time).0fs / %(total).0fs — %(count)d plates found") %
                           {"time": t, "total": duration, "count": len(seen_plates)})
             t += interval
 
         GLib.idle_add(self._scan_done)
+
+    def _seek_preview(self, timestamp_sec):
+        """Seek the video preview to match scan progress."""
+        try:
+            stream = self._video_widget.get_media_stream()
+            if stream and hasattr(stream, 'seek'):
+                # GTK MediaStream uses microseconds
+                stream.seek(int(timestamp_sec * 1_000_000))
+        except Exception:
+            pass
 
     def _scan_done(self):
         self._processing = False
@@ -713,7 +985,6 @@ class ANPRWindow(Adw.ApplicationWindow):
         self._status.set_text(_("Copied: %s") % plate)
 
     def _refresh_plate_list(self):
-        # Clear and rebuild from log
         while True:
             row = self._plate_list.get_row_at_index(0)
             if row is None:
@@ -731,7 +1002,6 @@ class ANPRApp(Adw.Application):
                          flags=Gio.ApplicationFlags.FLAGS_NONE)
         self.window = None
 
-        # Actions
         for name, callback in [
             ("settings", self._on_settings),
             ("export-log", self._on_export_log),
@@ -826,6 +1096,7 @@ class ANPRApp(Adw.Application):
         if not self.window:
             return
         from . import __version__
+        yt_dlp = _find_yt_dlp()
         info = (
             f"ANPR Viewer {__version__}\n"
             f"Python {sys.version}\n"
@@ -833,6 +1104,7 @@ class ANPRApp(Adw.Application):
             f"Adw {Adw.MAJOR_VERSION}.{Adw.MINOR_VERSION}\n"
             f"OS: {os.uname().sysname} {os.uname().release}\n"
             f"OCR: {self.window.settings.get('ocr_engine', 'tesseract')}\n"
+            f"yt-dlp: {yt_dlp or 'not found'}\n"
         )
         clipboard = Gdk.Display.get_default().get_clipboard()
         clipboard.set(info)
@@ -863,7 +1135,8 @@ class ANPRApp(Adw.Application):
             website="https://github.com/yeager/anpr-viewer",
             license_type=Gtk.License.GPL_3_0,
             issue_url="https://github.com/yeager/anpr-viewer/issues",
-            comments=_("Automatic license plate recognition from video files, streams, and cameras."),
+            comments=_("Automatic license plate recognition from video files, streams, and cameras.\n\n"
+                        "Supports YouTube, HTTP/HTTPS, RTSP, RTMP streams via yt-dlp and ffmpeg."),
         )
         dialog.present(self.window)
 
